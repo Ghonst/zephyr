@@ -1,0 +1,14 @@
+# Copyright (c) 2022, openEuler Embedded
+# SPDX-License-Identifier: Apache-2.0
+
+description: RPMSG service based UART
+
+compatible: "zephyr,rpmsg-uart"
+
+include: base.yaml
+
+properties:
+    ep-name:
+        type: string
+        required: true
+        description: the endpoint name of uart-rpmsg device

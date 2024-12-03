@@ -221,7 +221,7 @@ static bool ivshmem_configure(const struct device *dev)
 		}
 		k_mem_map_phys_bare((uint8_t **)&data->state_table_shmem,
 				    shmem_phys_addr, state_table_size,
-				    K_MEM_CACHE_WB | K_MEM_PERM_USER);
+				    K_MEM_CACHE_WB | K_MEM_PERM_USER | K_MEM_DIRECT_MAP);
 
 		/* R/W section (optional) */
 		cap_pos = vendor_cap + IVSHMEM_CFG_RW_SECTION_SZ / 4;
@@ -232,7 +232,7 @@ static bool ivshmem_configure(const struct device *dev)
 			k_mem_map_phys_bare((uint8_t **)&data->rw_section_shmem,
 					    shmem_phys_addr + rw_section_offset,
 					    data->rw_section_size,
-					    K_MEM_CACHE_WB | K_MEM_PERM_RW | K_MEM_PERM_USER);
+					    K_MEM_CACHE_WB | K_MEM_PERM_RW | K_MEM_PERM_USER | K_MEM_DIRECT_MAP);
 		}
 
 		/* Output sections */
@@ -250,8 +250,10 @@ static bool ivshmem_configure(const struct device *dev)
 			if (i == regs->id) {
 				flags |= K_MEM_PERM_RW;
 			}
-			k_mem_map_phys_bare((uint8_t **)&data->output_section_shmem[i],
-					    phys_addr, data->output_section_size, flags);
+			if (data->output_section_size > 0) {
+				k_mem_map_phys_bare((uint8_t **)&data->output_section_shmem[i],
+					phys_addr, data->output_section_size, flags);
+			}
 		}
 
 		data->size = output_section_offset +
@@ -276,7 +278,7 @@ static bool ivshmem_configure(const struct device *dev)
 
 		k_mem_map_phys_bare((uint8_t **)&data->shmem,
 				    shmem_phys_addr, data->size,
-				    K_MEM_CACHE_WB | K_MEM_PERM_RW | K_MEM_PERM_USER);
+				    K_MEM_CACHE_WB | K_MEM_PERM_RW | K_MEM_PERM_USER | K_MEM_DIRECT_MAP);
 	}
 
 	if (msi_x_bar_present) {

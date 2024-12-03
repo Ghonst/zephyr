@@ -20,8 +20,12 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME, CONFIG_RPMSG_SERVICE_LOG_LEVEL);
 
 #define MASTER IS_ENABLED(CONFIG_RPMSG_SERVICE_MODE_MASTER)
 
+#if defined(CONFIG_OPENAMP_RSC_TABLE)
+static struct virtio_device *vdev;
+#else
 static struct virtio_device vdev;
-static struct rpmsg_virtio_device rvdev;
+#endif
+struct rpmsg_virtio_device rvdev;
 static struct metal_io_region *io;
 static bool ep_crt_started;
 
@@ -29,16 +33,30 @@ static bool ep_crt_started;
 static struct rpmsg_virtio_shm_pool shpool;
 #endif
 
-static struct {
+struct service_endpoint {
 	const char *name;
 	rpmsg_ept_cb cb;
+	rpmsg_ns_unbind_cb unbind_cb;
 	struct rpmsg_endpoint ep;
 	volatile bool bound;
-} endpoints[CONFIG_RPMSG_SERVICE_NUM_ENDPOINTS];
+};
+
+static struct service_endpoint endpoints[CONFIG_RPMSG_SERVICE_NUM_ENDPOINTS];
 
 static void rpmsg_service_unbind(struct rpmsg_endpoint *ep)
 {
+	struct service_endpoint *endpoint =
+			CONTAINER_OF(ep, struct service_endpoint, ep);
+
+	if (endpoint->unbind_cb) {
+		endpoint->unbind_cb(ep);
+	}
+
+	/* get unbind reg from host, adjust name to avoid sending ns msg back */
+	ep->name[0] = 0;
 	rpmsg_destroy_ept(ep);
+
+	memset(endpoint, 0, sizeof(struct service_endpoint));
 }
 
 #if MASTER
@@ -87,11 +105,15 @@ static int rpmsg_service_init(void)
 		return err;
 	}
 
+#if defined(CONFIG_OPENAMP_RSC_TABLE)
+	err = rpmsg_init_vdev(&rvdev, vdev, NULL, io, NULL);
+#else
 #if MASTER
 	rpmsg_virtio_init_shm_pool(&shpool, (void *)SHM_START_ADDR, SHM_SIZE);
 	err = rpmsg_init_vdev(&rvdev, &vdev, ns_bind_cb, io, &shpool);
 #else
 	err = rpmsg_init_vdev(&rvdev, &vdev, NULL, io, NULL);
+#endif
 #endif
 
 	if (err) {
@@ -129,7 +151,8 @@ static int rpmsg_service_init(void)
 	return 0;
 }
 
-int rpmsg_service_register_endpoint(const char *name, rpmsg_ept_cb cb)
+int rpmsg_service_register_endpoint(const char *name, rpmsg_ept_cb cb,
+							rpmsg_ns_unbind_cb unbind_cb, void *priv)
 {
 	if (ep_crt_started) {
 		return -EINPROGRESS;
@@ -139,7 +162,8 @@ int rpmsg_service_register_endpoint(const char *name, rpmsg_ept_cb cb)
 		if (!endpoints[i].name) {
 			endpoints[i].name = name;
 			endpoints[i].cb = cb;
-
+			endpoints[i].unbind_cb = unbind_cb;
+			endpoints[i].ep.priv = priv;
 			return i;
 		}
 	}
@@ -152,6 +176,11 @@ int rpmsg_service_register_endpoint(const char *name, rpmsg_ept_cb cb)
 bool rpmsg_service_endpoint_is_bound(int endpoint_id)
 {
 	return endpoints[endpoint_id].bound;
+}
+
+void rpmsg_service_endpoint_bound(int endpoint_id)
+{
+	endpoints[endpoint_id].bound = true;
 }
 
 int rpmsg_service_send(int endpoint_id, const void *data, size_t len)

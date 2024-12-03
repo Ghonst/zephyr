@@ -59,8 +59,33 @@ static const struct device *const ipm_handle =
 	DEVICE_DT_GET(DT_CHOSEN(zephyr_ipc));
 #endif
 
+/*
+ * 32 bit: -1 == 0xffffffff
+ * 64 bit: -1 == 0xffffffffffffffff
+ */
+#define DEFAULT_PAGE_SHIFT (-1UL)
+#define DEFAULT_PAGE_MASK  (-1UL)
+
 static metal_phys_addr_t shm_physmap[] = { SHM_START_ADDR };
-static struct metal_io_region shm_io;
+static struct metal_device shm_device = {
+	.name = SHM_DEVICE_NAME,
+	.bus = NULL,
+	.num_regions = 1,
+	{
+		{
+			.virt       = (void *) SHM_START_ADDR,
+			.physmap    = shm_physmap,
+			.size       = SHM_SIZE,
+			.page_shift = DEFAULT_PAGE_SHIFT,
+			.page_mask  = DEFAULT_PAGE_MASK,
+			.mem_flags  = 0,
+			.ops        = { NULL },
+		},
+	},
+	.node = { NULL },
+	.irq_num = 0,
+	.irq_info = NULL
+};
 
 static struct virtio_vring_info rvrings[2] = {
 	[0] = {
@@ -165,6 +190,7 @@ int rpmsg_backend_init(struct metal_io_region **io, struct virtio_device *vdev)
 {
 	int32_t                  err;
 	struct metal_init_params metal_params = METAL_INIT_DEFAULTS;
+	struct metal_device     *device;
 
 	/* Start IPM workqueue */
 	k_work_queue_start(&ipm_work_q, ipm_stack_area,
@@ -182,9 +208,23 @@ int rpmsg_backend_init(struct metal_io_region **io, struct virtio_device *vdev)
 		return err;
 	}
 
-	/* declare shared memory region */
-	metal_io_init(&shm_io, (void *)SHM_START_ADDR, shm_physmap, SHM_SIZE, -1, 0, NULL);
-	*io = &shm_io;
+	err = metal_register_generic_device(&shm_device);
+	if (err) {
+		LOG_ERR("Couldn't register shared memory device: %d", err);
+		return err;
+	}
+
+	err = metal_device_open("generic", SHM_DEVICE_NAME, &device);
+	if (err) {
+		LOG_ERR("metal_device_open failed: %d", err);
+		return err;
+	}
+
+	*io = metal_device_io_region(device, 0);
+	if (!*io) {
+		LOG_ERR("metal_device_io_region failed to get region");
+		return err;
+	}
 
 	/* IPM setup */
 #if defined(CONFIG_RPMSG_SERVICE_DUAL_IPM_SUPPORT)

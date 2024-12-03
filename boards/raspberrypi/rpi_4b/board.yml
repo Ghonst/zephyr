@@ -1,5 +1,5 @@
 board:
-  name: rpi_4b
+  name: rpi_4b_ivshmem
   full_name: Raspberry Pi 4 Model B (Cortex-A72)
   vendor: raspberrypi
   socs:

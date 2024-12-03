@@ -16,5 +16,6 @@ zephyr_library_sources_ifdef(CONFIG_IPM_IVSHMEM ipm_ivshmem.c)
 zephyr_library_sources_ifdef(CONFIG_ESP32_SOFT_IPM ipm_esp32.c)
 zephyr_library_sources_ifdef(CONFIG_XLNX_IPI ipm_xlnx_ipi.c)
 zephyr_library_sources_ifdef(CONFIG_IPM_MBOX ipm_mbox.c)
+zephyr_library_sources_ifdef(CONFIG_IPM_GIC_SGI ipm_gic_sgi.c)
 
 zephyr_library_sources_ifdef(CONFIG_USERSPACE   ipm_handlers.c)
